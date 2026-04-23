@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger,
 } from '@/components/ui/dialog'
@@ -18,11 +18,12 @@ import { useProducts } from '@/lib/hooks/useProducts'
 import { Stage } from '@/lib/hooks/useOpportunities'
 
 type Props = {
+  funnelId: string | null
   stages: Stage[]
   onSuccess: () => void
 }
 
-export function NewOpportunityDialog({ stages, onSuccess }: Props) {
+export function NewOpportunityDialog({ funnelId, stages, onSuccess }: Props) {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -46,6 +47,16 @@ export function NewOpportunityDialog({ stages, onSuccess }: Props) {
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 
+  useEffect(() => {
+    setFormData(prev => {
+      const stageExists = stages.some(stage => stage.id === prev.stage_id)
+      return {
+        ...prev,
+        stage_id: stageExists ? prev.stage_id : (stages[0]?.id || ''),
+      }
+    })
+  }, [stages])
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
@@ -62,21 +73,14 @@ export function NewOpportunityDialog({ stages, onSuccess }: Props) {
       .single()
 
     if (!member) { setError('Você não está vinculado a nenhuma organização.'); setLoading(false); return }
-
-    const { data: funnel } = await supabase
-      .from('funnels')
-      .select('id')
-      .eq('organization_id', member.organization_id)
-      .eq('active', true)
-      .single()
-
-    if (!funnel) { setError('Nenhum funil encontrado.'); setLoading(false); return }
+    if (!funnelId) { setError('Nenhum funil selecionado.'); setLoading(false); return }
+    if (!formData.stage_id) { setError('Crie uma etapa antes de adicionar oportunidades.'); setLoading(false); return }
 
     const { data: opp, error: insertError } = await supabase
       .from('opportunities')
       .insert({
         organization_id: member.organization_id,
-        funnel_id: funnel.id,
+        funnel_id: funnelId,
         title: formData.title,
         client_id: formData.client_id,
         stage_id: formData.stage_id,
@@ -116,7 +120,12 @@ export function NewOpportunityDialog({ stages, onSuccess }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger className={buttonVariants({ className: 'bg-gradient-to-r from-blue to-blue-vivid hover:opacity-90 text-white rounded-xl shadow-sm' })}>
+      <DialogTrigger
+        disabled={!funnelId || stages.length === 0}
+        className={buttonVariants({
+          className: 'bg-gradient-to-r from-blue to-blue-vivid hover:opacity-90 text-white rounded-xl shadow-sm disabled:cursor-not-allowed disabled:opacity-50',
+        })}
+      >
         <Plus className="w-4 h-4 mr-2" />
         Nova Oportunidade
       </DialogTrigger>

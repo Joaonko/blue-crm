@@ -28,7 +28,7 @@ export function useDashboard() {
 
       const { data: member } = await supabase
         .from('organization_members')
-        .select('organization_id, organizations(funnels(id))')
+        .select('organization_id')
         .eq('user_id', user.id)
         .eq('active', true)
         .single()
@@ -36,38 +36,62 @@ export function useDashboard() {
       if (!member) { setLoading(false); return }
 
       const orgId = member.organization_id
-      const orgData = member.organizations as unknown
-      const org = (Array.isArray(orgData) ? orgData[0] : orgData) as { funnels: { id: string }[] } | null
-      const funnelId = org?.funnels?.[0]?.id
+      const { data: activeFunnels } = await supabase
+        .from('funnels')
+        .select('id')
+        .eq('organization_id', orgId)
+        .eq('active', true)
+        .order('created_at', { ascending: true })
 
-      // Fetch all opportunities for the org
+      const funnelIds = (activeFunnels ?? []).map(funnel => funnel.id)
+
       const [
         { data: wonOpps },
         { data: openOpps },
         { data: allOpps },
         { data: recentActivitiesData },
-      ] = await Promise.all([
-        supabase
-          .from('opportunities')
-          .select('value, closed_at')
-          .eq('organization_id', orgId)
-          .eq('status', 'won'),
-        supabase
-          .from('opportunities')
-          .select('value, stage_id')
-          .eq('organization_id', orgId)
-          .eq('status', 'open'),
-        supabase
-          .from('opportunities')
-          .select('id, status')
-          .eq('organization_id', orgId),
-        supabase
-          .from('activities')
-          .select('id, description, type, created_at, user_id, opportunity_id')
-          .eq('organization_id', orgId)
-          .order('created_at', { ascending: false })
-          .limit(10),
-      ])
+        { data: activeStagesData },
+      ] = funnelIds.length > 0
+        ? await Promise.all([
+            supabase
+              .from('opportunities')
+              .select('value, closed_at, funnel_id')
+              .in('funnel_id', funnelIds)
+              .eq('status', 'won'),
+            supabase
+              .from('opportunities')
+              .select('value, stage_id, funnel_id')
+              .in('funnel_id', funnelIds)
+              .eq('status', 'open'),
+            supabase
+              .from('opportunities')
+              .select('id, status, funnel_id')
+              .in('funnel_id', funnelIds),
+            supabase
+              .from('activities')
+              .select('id, description, type, created_at, user_id, opportunity_id')
+              .eq('organization_id', orgId)
+              .order('created_at', { ascending: false })
+              .limit(10),
+            supabase
+              .from('stages')
+              .select('id, name, funnel_id, order')
+              .in('funnel_id', funnelIds)
+              .order('funnel_id', { ascending: true })
+              .order('order', { ascending: true }),
+          ])
+        : await Promise.all([
+            Promise.resolve({ data: [] }),
+            Promise.resolve({ data: [] }),
+            Promise.resolve({ data: [] }),
+            supabase
+              .from('activities')
+              .select('id, description, type, created_at, user_id, opportunity_id')
+              .eq('organization_id', orgId)
+              .order('created_at', { ascending: false })
+              .limit(10),
+            Promise.resolve({ data: [] }),
+          ])
 
       const totalRevenue = (wonOpps ?? []).reduce((sum, o) => sum + (o.value ?? 0), 0)
       const pipelineValue = (openOpps ?? []).reduce((sum, o) => sum + (o.value ?? 0), 0)
@@ -77,24 +101,26 @@ export function useDashboard() {
         ? Math.round((wonCount / (wonCount + lostCount)) * 100)
         : 0
 
-      // Deals by stage
-      let dealsByStage: DashboardMetrics['dealsByStage'] = []
-      if (funnelId) {
-        const { data: stages } = await supabase
-          .from('stages')
-          .select('id, name')
-          .eq('funnel_id', funnelId)
-          .order('order', { ascending: true })
+      const stageNameById = new Map((activeStagesData ?? []).map(stage => [stage.id, stage.name]))
+      const dealsByStageMap = new Map<string, { stage: string; count: number; value: number }>()
 
-        dealsByStage = (stages ?? []).map(stage => {
-          const stageOpps = (openOpps ?? []).filter(o => o.stage_id === stage.id)
-          return {
-            stage: stage.name,
-            count: stageOpps.length,
-            value: stageOpps.reduce((sum, o) => sum + (o.value ?? 0), 0),
-          }
-        })
+      for (const stage of activeStagesData ?? []) {
+        if (!dealsByStageMap.has(stage.name)) {
+          dealsByStageMap.set(stage.name, { stage: stage.name, count: 0, value: 0 })
+        }
       }
+
+      for (const opportunity of openOpps ?? []) {
+        const stageName = stageNameById.get(opportunity.stage_id)
+        if (!stageName) continue
+
+        const current = dealsByStageMap.get(stageName) ?? { stage: stageName, count: 0, value: 0 }
+        current.count += 1
+        current.value += opportunity.value ?? 0
+        dealsByStageMap.set(stageName, current)
+      }
+
+      const dealsByStage = Array.from(dealsByStageMap.values())
 
       // Monthly revenue (last 6 months)
       const monthlyRevenue: DashboardMetrics['monthlyRevenue'] = []
