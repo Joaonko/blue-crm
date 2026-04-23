@@ -147,7 +147,7 @@ export default function DashboardPage() {
               <YAxis tick={{ fontSize: 11, fill: '#94A3B8' }} tickFormatter={v => `R$${(v / 1000).toFixed(0)}k`} axisLine={false} tickLine={false} />
               <Tooltip
                 contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 24px rgba(0,0,0,0.1)', fontSize: '12px' }}
-                formatter={(v: number) => [formatCurrency(v), 'Receita']}
+                formatter={(v) => [formatCurrency(Number(v)), 'Receita']}
               />
               <Area type="monotone" dataKey="revenue" stroke="#2E86C1" strokeWidth={2.5} fill="url(#blueGrad)" dot={{ r: 4, fill: '#2E86C1', strokeWidth: 0 }} activeDot={{ r: 6, strokeWidth: 0 }} />
             </AreaChart>
@@ -172,7 +172,7 @@ export default function DashboardPage() {
                 <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
                 <Tooltip
                   contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 24px rgba(0,0,0,0.1)', fontSize: '12px' }}
-                  formatter={(v: number) => [v, 'Negócios']}
+                  formatter={(v) => [Number(v), 'Negócios']}
                 />
                 <Bar dataKey="count" fill="#2E86C1" radius={[6, 6, 0, 0]} maxBarSize={48} />
               </BarChart>
@@ -195,7 +195,7 @@ export default function DashboardPage() {
               <YAxis tick={{ fontSize: 11, fill: '#94A3B8' }} tickFormatter={v => `R$${(v / 1000).toFixed(0)}k`} axisLine={false} tickLine={false} />
               <Tooltip
                 contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 24px rgba(0,0,0,0.1)', fontSize: '12px' }}
-                formatter={(v: number) => [formatCurrency(v), 'Valor']}
+                formatter={(v) => [formatCurrency(Number(v)), 'Valor']}
               />
               <Bar dataKey="value" fill="#1A3A5C" radius={[6, 6, 0, 0]} maxBarSize={48} />
             </BarChart>
