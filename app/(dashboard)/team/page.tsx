@@ -1,7 +1,7 @@
 'use client'
 
 import { useTeam, type MemberRole } from '@/lib/hooks/useTeam'
-import { InviteDialog } from '@/components/team/InviteDialog'
+import { CreateUserDialog } from '@/components/team/CreateUserDialog'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Trash2, Clock, X } from 'lucide-react'
+import { Trash2 } from 'lucide-react'
 import { useState } from 'react'
 
 const roleLabels: Record<MemberRole, string> = {
@@ -37,24 +37,17 @@ function initials(name: string) {
 
 export default function TeamPage() {
   const {
-    members, invitations, currentUserRole, loading,
-    changeRole, removeMember, inviteMember, cancelInvitation,
+    members, currentUserRole, loading,
+    changeRole, removeMember, createMemberAccount,
   } = useTeam()
 
   const [removing, setRemoving] = useState<string | null>(null)
-  const [cancelling, setCancelling] = useState<string | null>(null)
 
   async function handleRemove(memberId: string, name: string) {
     if (!confirm(`Remover ${name} da organização?`)) return
     setRemoving(memberId)
     await removeMember(memberId)
     setRemoving(null)
-  }
-
-  async function handleCancelInvite(id: string) {
-    setCancelling(id)
-    await cancelInvitation(id)
-    setCancelling(null)
   }
 
   if (loading) {
@@ -77,7 +70,7 @@ export default function TeamPage() {
           </p>
         </div>
         {canManage(currentUserRole) && (
-          <InviteDialog onInvite={inviteMember} />
+          <CreateUserDialog onCreateUser={createMemberAccount} />
         )}
       </div>
 
@@ -147,43 +140,6 @@ export default function TeamPage() {
           ))}
         </CardContent>
       </Card>
-
-      {/* Convites pendentes */}
-      {invitations.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Clock className="w-4 h-4 text-muted-foreground" />
-              Convites Pendentes
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            {invitations.map((inv, i) => (
-              <div key={inv.id}>
-                {i > 0 && <Separator />}
-                <div className="flex items-center justify-between px-6 py-4">
-                  <div>
-                    <p className="text-sm font-medium text-navy">{inv.email}</p>
-                    <p className="text-xs text-muted-foreground">
-                      Expira em {new Date(inv.expires_at).toLocaleDateString('pt-BR')} •{' '}
-                      {roleLabels[inv.role]}
-                    </p>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    className="text-muted-foreground hover:text-red-600 hover:bg-red-50"
-                    disabled={cancelling === inv.id}
-                    onClick={() => handleCancelInvite(inv.id)}
-                  >
-                    <X className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
     </div>
   )
 }

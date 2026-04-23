@@ -14,26 +14,12 @@ export type TeamMember = {
   avatar_url: string | null
 }
 
-export type Invitation = {
-  id: string
-  email: string
-  role: MemberRole
-  status: 'pending' | 'accepted' | 'expired'
-  expires_at: string
-  created_at: string
-  token: string
-}
-
-type InviteMemberResult = {
+type CreateMemberAccountResult = {
   error: Error | { message: string } | null
-  token: string | null
-  emailSent: boolean
-  emailError: string | null
 }
 
 export function useTeam() {
   const [members, setMembers] = useState<TeamMember[]>([])
-  const [invitations, setInvitations] = useState<Invitation[]>([])
   const [orgId, setOrgId] = useState<string | null>(null)
   const [currentUserRole, setCurrentUserRole] = useState<MemberRole | null>(null)
   const [loading, setLoading] = useState(true)
@@ -84,17 +70,10 @@ export function useTeam() {
           avatar_url: profilesMap.get(m.user_id)?.avatar_url ?? null,
         }))
       )
+    } else {
+      setMembers([])
     }
 
-    // Busca convites pendentes
-    const { data: invitesData } = await supabase
-      .from('invitations')
-      .select('id, email, role, status, expires_at, created_at, token')
-      .eq('organization_id', currentMember.organization_id)
-      .eq('status', 'pending')
-      .order('created_at', { ascending: false })
-
-    setInvitations((invitesData as Invitation[]) ?? [])
     setLoading(false)
   }
 
@@ -124,73 +103,45 @@ export function useTeam() {
     return { error }
   }
 
-  async function inviteMember(email: string, role: MemberRole): Promise<InviteMemberResult> {
+  async function createMemberAccount(
+    fullName: string,
+    email: string,
+    password: string,
+    role: MemberRole
+  ): Promise<CreateMemberAccountResult> {
     if (!orgId) {
-      return { error: new Error('Organização não encontrada'), token: null, emailSent: false, emailError: null }
+      return { error: new Error('Organização não encontrada') }
     }
 
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
-      return { error: new Error('Não autenticado'), token: null, emailSent: false, emailError: null }
+      return { error: new Error('Não autenticado') }
     }
 
-    const normalizedEmail = email.trim().toLowerCase()
-    const token = crypto.randomUUID()
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+    try {
+      const response = await fetch('/api/team/users', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          fullName,
+          email,
+          password,
+          role,
+        }),
+      })
 
-    const { error } = await supabase.from('invitations').insert({
-      organization_id: orgId,
-      email: normalizedEmail,
-      role,
-      token,
-      invited_by: user.id,
-      expires_at: expiresAt,
-      status: 'pending',
-    })
-
-    let emailSent = false
-    let emailError: string | null = null
-
-    if (!error) {
-      try {
-        const response = await fetch('/api/invite/send', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            email: normalizedEmail,
-            token,
-            role,
-          }),
-        })
-
-        if (!response.ok) {
-          const payload = await response.json().catch(() => null)
-          emailError = payload?.error ?? 'Nao foi possivel enviar o e-mail de convite.'
-        } else {
-          emailSent = true
-        }
-      } catch {
-        emailError = 'Nao foi possivel enviar o e-mail de convite.'
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null)
+        return { error: { message: payload?.error ?? 'Nao foi possivel criar o usuario.' } }
       }
 
       await fetchData()
+      return { error: null }
+    } catch {
+      return { error: { message: 'Nao foi possivel criar o usuario.' } }
     }
-
-    return { error, token: error ? null : token, emailSent, emailError }
-  }
-
-  async function cancelInvitation(invitationId: string) {
-    const { error } = await supabase
-      .from('invitations')
-      .update({ status: 'expired' })
-      .eq('id', invitationId)
-
-    if (!error) {
-      setInvitations(prev => prev.filter(i => i.id !== invitationId))
-    }
-    return { error }
   }
 
   useEffect(() => {
@@ -200,14 +151,12 @@ export function useTeam() {
 
   return {
     members,
-    invitations,
     orgId,
     currentUserRole,
     loading,
     changeRole,
     removeMember,
-    inviteMember,
-    cancelInvitation,
+    createMemberAccount,
     refresh: fetchData,
   }
 }

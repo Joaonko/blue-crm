@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { UserPlus, Copy, Check } from 'lucide-react'
+import { UserPlus } from 'lucide-react'
 import { type MemberRole, type useTeam } from '@/lib/hooks/useTeam'
 
 const roleLabels: Record<MemberRole, string> = {
@@ -21,99 +21,77 @@ const roleLabels: Record<MemberRole, string> = {
 }
 
 type Props = {
-  onInvite: ReturnType<typeof useTeam>['inviteMember']
+  onCreateUser: ReturnType<typeof useTeam>['createMemberAccount']
 }
 
-export function InviteDialog({ onInvite }: Props) {
+export function CreateUserDialog({ onCreateUser }: Props) {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [inviteLink, setInviteLink] = useState<string | null>(null)
-  const [emailStatus, setEmailStatus] = useState<'sent' | 'failed' | null>(null)
-  const [emailStatusMessage, setEmailStatusMessage] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [role, setRole] = useState<MemberRole>('member')
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+
+    if (password !== confirmPassword) {
+      setError('As senhas não coincidem.')
+      return
+    }
+
     setLoading(true)
     setError(null)
 
-    const { error, token, emailSent, emailError } = await onInvite(email, role)
+    const { error } = await onCreateUser(fullName, email, password, role)
 
     if (error) {
       setError(error.message)
-    } else if (token) {
-      setInviteLink(`${window.location.origin}/invite/${token}`)
-      if (emailSent) {
-        setEmailStatus('sent')
-        setEmailStatusMessage(`Convite enviado para ${email}.`)
-      } else {
-        setEmailStatus('failed')
-        setEmailStatusMessage(emailError ?? 'Convite criado, mas o e-mail nao pode ser enviado.')
-      }
+    } else {
+      setSuccessMessage(`Usuário ${fullName} criado com sucesso. Compartilhe o login e a senha com ${email}.`)
     }
 
     setLoading(false)
   }
 
-  async function handleCopy() {
-    if (!inviteLink) return
-    await navigator.clipboard.writeText(inviteLink)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
-  function handleClose(open: boolean) {
-    if (!open) {
+  function handleClose(nextOpen: boolean) {
+    if (!nextOpen) {
+      setFullName('')
       setEmail('')
+      setPassword('')
+      setConfirmPassword('')
       setRole('member')
       setError(null)
-      setInviteLink(null)
-      setEmailStatus(null)
-      setEmailStatusMessage(null)
-      setCopied(false)
+      setSuccessMessage(null)
     }
-    setOpen(open)
+
+    setOpen(nextOpen)
   }
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogTrigger className={buttonVariants({ className: 'bg-blue hover:bg-blue/90 text-white' })}>
         <UserPlus className="w-4 h-4 mr-2" />
-        Convidar Membro
+        Criar Usuário
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[440px]">
+      <DialogContent className="sm:max-w-[460px]">
         <DialogHeader>
-          <DialogTitle>Convidar Membro</DialogTitle>
+          <DialogTitle>Criar Usuário</DialogTitle>
           <DialogDescription>
-            Envie um convite por e-mail para adicionar alguem a sua organizacao.
+            Crie o acesso de um novo usuário com e-mail e senha definidos por você.
           </DialogDescription>
         </DialogHeader>
 
-        {inviteLink ? (
+        {successMessage ? (
           <div className="space-y-4 mt-2">
-            <div
-              className={emailStatus === 'sent'
-                ? 'rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-700'
-                : 'rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700'}
-            >
-              {emailStatusMessage}
-            </div>
-            <p className="text-sm text-muted-foreground">
-              {emailStatus === 'sent'
-                ? <>O link abaixo continua disponivel caso voce queira copiar manualmente para <strong>{email}</strong>.</>
-                : <>O convite foi criado. Compartilhe o link abaixo manualmente com <strong>{email}</strong>.</>}
-            </p>
-            <div className="flex gap-2">
-              <Input value={inviteLink} readOnly className="font-mono text-xs" />
-              <Button type="button" variant="outline" size="icon-sm" onClick={handleCopy}>
-                {copied ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
-              </Button>
+            <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-700">
+              {successMessage}
             </div>
             <p className="text-xs text-muted-foreground">
-              O link expira em 7 dias. O usuário deve estar cadastrado ou criar uma conta ao clicar.
+              O usuário já poderá entrar no sistema sem confirmação por e-mail.
             </p>
             <Button className="w-full bg-blue hover:bg-blue/90" onClick={() => handleClose(false)}>
               Fechar
@@ -122,15 +100,54 @@ export function InviteDialog({ onInvite }: Props) {
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4 mt-2">
             <div className="space-y-2">
+              <Label htmlFor="fullName">Nome completo *</Label>
+              <Input
+                id="fullName"
+                placeholder="João Silva"
+                value={fullName}
+                onChange={e => setFullName(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="email">Email *</Label>
               <Input
                 id="email"
                 type="email"
-                placeholder="colega@empresa.com"
+                placeholder="colaborador@empresa.com"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 required
               />
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="password">Senha *</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="Minimo 6 caracteres"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  minLength={6}
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword">Confirmar senha *</Label>
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  placeholder="Repita a senha"
+                  value={confirmPassword}
+                  onChange={e => setConfirmPassword(e.target.value)}
+                  minLength={6}
+                  required
+                />
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -140,8 +157,10 @@ export function InviteDialog({ onInvite }: Props) {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {(['admin', 'manager', 'member'] as MemberRole[]).map(r => (
-                    <SelectItem key={r} value={r}>{roleLabels[r]}</SelectItem>
+                  {(['admin', 'manager', 'member'] as MemberRole[]).map(currentRole => (
+                    <SelectItem key={currentRole} value={currentRole}>
+                      {roleLabels[currentRole]}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -158,7 +177,7 @@ export function InviteDialog({ onInvite }: Props) {
                 Cancelar
               </Button>
               <Button type="submit" disabled={loading} className="flex-1 bg-blue hover:bg-blue/90">
-                {loading ? 'Enviando...' : 'Enviar Convite'}
+                {loading ? 'Criando...' : 'Criar Usuário'}
               </Button>
             </div>
           </form>
