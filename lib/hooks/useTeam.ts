@@ -24,6 +24,13 @@ export type Invitation = {
   token: string
 }
 
+type InviteMemberResult = {
+  error: Error | { message: string } | null
+  token: string | null
+  emailSent: boolean
+  emailError: string | null
+}
+
 export function useTeam() {
   const [members, setMembers] = useState<TeamMember[]>([])
   const [invitations, setInvitations] = useState<Invitation[]>([])
@@ -117,18 +124,23 @@ export function useTeam() {
     return { error }
   }
 
-  async function inviteMember(email: string, role: MemberRole) {
-    if (!orgId) return { error: new Error('Organização não encontrada'), token: null }
+  async function inviteMember(email: string, role: MemberRole): Promise<InviteMemberResult> {
+    if (!orgId) {
+      return { error: new Error('Organização não encontrada'), token: null, emailSent: false, emailError: null }
+    }
 
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return { error: new Error('Não autenticado'), token: null }
+    if (!user) {
+      return { error: new Error('Não autenticado'), token: null, emailSent: false, emailError: null }
+    }
 
+    const normalizedEmail = email.trim().toLowerCase()
     const token = crypto.randomUUID()
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
 
     const { error } = await supabase.from('invitations').insert({
       organization_id: orgId,
-      email,
+      email: normalizedEmail,
       role,
       token,
       invited_by: user.id,
@@ -136,11 +148,37 @@ export function useTeam() {
       status: 'pending',
     })
 
+    let emailSent = false
+    let emailError: string | null = null
+
     if (!error) {
+      try {
+        const response = await fetch('/api/invite/send', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email: normalizedEmail,
+            token,
+            role,
+          }),
+        })
+
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null)
+          emailError = payload?.error ?? 'Nao foi possivel enviar o e-mail de convite.'
+        } else {
+          emailSent = true
+        }
+      } catch {
+        emailError = 'Nao foi possivel enviar o e-mail de convite.'
+      }
+
       await fetchData()
     }
 
-    return { error, token }
+    return { error, token: error ? null : token, emailSent, emailError }
   }
 
   async function cancelInvitation(invitationId: string) {

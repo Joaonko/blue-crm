@@ -6,8 +6,42 @@ import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { CheckCircle, XCircle, Loader2 } from 'lucide-react'
+import { type MemberRole } from '@/lib/hooks/useTeam'
 
 type InviteState = 'loading' | 'valid' | 'accepting' | 'success' | 'error' | 'expired' | 'already'
+
+type InviteDetails = {
+  id: string
+  email: string
+  role: MemberRole
+  status: 'pending' | 'accepted' | 'expired'
+  expires_at: string
+  organization_id: string
+  organization_name: string
+}
+
+const roleLabels: Record<MemberRole, string> = {
+  owner: 'Proprietário',
+  admin: 'Administrador',
+  manager: 'Gerente',
+  member: 'Membro',
+}
+
+function normalizeInviteError(message?: string) {
+  if (!message) return 'Nao foi possivel validar este convite.'
+  const normalizedMessage = message.toLowerCase()
+
+  if (normalizedMessage.includes('outro e-mail')) {
+    return 'Este convite pertence a outro e-mail. Entre com a conta correta para continuar.'
+  }
+  if (normalizedMessage.includes('nao encontrado') || normalizedMessage.includes('não encontrado')) {
+    return 'Convite nao encontrado.'
+  }
+  if (normalizedMessage.includes('expir')) {
+    return 'Este convite expirou. Peca um novo convite ao administrador.'
+  }
+  return message
+}
 
 export default function InvitePage() {
   const { token } = useParams<{ token: string }>()
@@ -18,6 +52,7 @@ export default function InvitePage() {
   const [errorMsg, setErrorMsg] = useState('')
   const [inviteEmail, setInviteEmail] = useState('')
   const [orgName, setOrgName] = useState('')
+  const [inviteRole, setInviteRole] = useState('')
 
   useEffect(() => {
     async function validateInvite() {
@@ -27,15 +62,21 @@ export default function InvitePage() {
         return
       }
 
-      const { data: invite } = await supabase
-        .from('invitations')
-        .select('id, email, role, status, expires_at, organization_id, organizations(name)')
-        .eq('token', token)
-        .single()
+      const { data, error } = await supabase.rpc('get_invitation_details', {
+        invite_token: token,
+      })
+
+      if (error) {
+        setState('error')
+        setErrorMsg(normalizeInviteError(error.message))
+        return
+      }
+
+      const invite = data as InviteDetails | null
 
       if (!invite) {
         setState('error')
-        setErrorMsg('Convite não encontrado.')
+        setErrorMsg('Convite nao encontrado.')
         return
       }
 
@@ -50,7 +91,8 @@ export default function InvitePage() {
         .select('id')
         .eq('user_id', user.id)
         .eq('organization_id', invite.organization_id)
-        .single()
+        .eq('active', true)
+        .maybeSingle()
 
       if (existing) {
         setState('already')
@@ -58,9 +100,8 @@ export default function InvitePage() {
       }
 
       setInviteEmail(invite.email)
-      const orgData = invite.organizations as unknown
-      const org = (Array.isArray(orgData) ? orgData[0] : orgData) as { name: string } | null
-      setOrgName(org?.name ?? 'organização')
+      setOrgName(invite.organization_name ?? 'organizacao')
+      setInviteRole(roleLabels[invite.role] ?? 'Membro')
       setState('valid')
     }
 
@@ -72,37 +113,23 @@ export default function InvitePage() {
     setState('accepting')
 
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { router.push('/login'); return }
+    if (!user) { router.push(`/login?next=/invite/${token}`); return }
 
-    const { data: invite } = await supabase
-      .from('invitations')
-      .select('id, role, organization_id')
-      .eq('token', token)
-      .single()
-
-    if (!invite) {
-      setState('error')
-      setErrorMsg('Convite inválido.')
-      return
-    }
-
-    const { error } = await supabase.from('organization_members').insert({
-      organization_id: invite.organization_id,
-      user_id: user.id,
-      role: invite.role,
-      active: true,
+    const { error } = await supabase.rpc('accept_invitation', {
+      invite_token: token,
     })
 
     if (error) {
+      const message = normalizeInviteError(error.message)
+      if (message.includes('expirou')) {
+        setState('expired')
+        return
+      }
+
       setState('error')
-      setErrorMsg(error.message)
+      setErrorMsg(message)
       return
     }
-
-    await supabase
-      .from('invitations')
-      .update({ status: 'accepted' })
-      .eq('id', invite.id)
 
     setState('success')
     setTimeout(() => router.push('/dashboard'), 2000)
@@ -128,7 +155,7 @@ export default function InvitePage() {
               </div>
               <CardTitle className="text-navy">Você foi convidado!</CardTitle>
               <CardDescription>
-                Para entrar na organização <strong>{orgName}</strong>
+                Entre com a conta <strong>{inviteEmail}</strong> para entrar em <strong>{orgName}</strong> como <strong>{inviteRole}</strong>.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">

@@ -29,6 +29,8 @@ export function InviteDialog({ onInvite }: Props) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [inviteLink, setInviteLink] = useState<string | null>(null)
+  const [emailStatus, setEmailStatus] = useState<'sent' | 'failed' | null>(null)
+  const [emailStatusMessage, setEmailStatusMessage] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<MemberRole>('member')
@@ -38,12 +40,19 @@ export function InviteDialog({ onInvite }: Props) {
     setLoading(true)
     setError(null)
 
-    const { error, token } = await onInvite(email, role)
+    const { error, token, emailSent, emailError } = await onInvite(email, role)
 
     if (error) {
       setError(error.message)
     } else if (token) {
       setInviteLink(`${window.location.origin}/invite/${token}`)
+      if (emailSent) {
+        setEmailStatus('sent')
+        setEmailStatusMessage(`Convite enviado para ${email}.`)
+      } else {
+        setEmailStatus('failed')
+        setEmailStatusMessage(emailError ?? 'Convite criado, mas o e-mail nao pode ser enviado.')
+      }
     }
 
     setLoading(false)
@@ -62,6 +71,8 @@ export function InviteDialog({ onInvite }: Props) {
       setRole('member')
       setError(null)
       setInviteLink(null)
+      setEmailStatus(null)
+      setEmailStatusMessage(null)
       setCopied(false)
     }
     setOpen(open)
@@ -77,14 +88,23 @@ export function InviteDialog({ onInvite }: Props) {
         <DialogHeader>
           <DialogTitle>Convidar Membro</DialogTitle>
           <DialogDescription>
-            Gere um link de convite para adicionar alguém à sua organização.
+            Envie um convite por e-mail para adicionar alguem a sua organizacao.
           </DialogDescription>
         </DialogHeader>
 
         {inviteLink ? (
           <div className="space-y-4 mt-2">
+            <div
+              className={emailStatus === 'sent'
+                ? 'rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-700'
+                : 'rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700'}
+            >
+              {emailStatusMessage}
+            </div>
             <p className="text-sm text-muted-foreground">
-              Convite criado! Compartilhe o link abaixo com <strong>{email}</strong>:
+              {emailStatus === 'sent'
+                ? <>O link abaixo continua disponivel caso voce queira copiar manualmente para <strong>{email}</strong>.</>
+                : <>O convite foi criado. Compartilhe o link abaixo manualmente com <strong>{email}</strong>.</>}
             </p>
             <div className="flex gap-2">
               <Input value={inviteLink} readOnly className="font-mono text-xs" />
@@ -138,7 +158,7 @@ export function InviteDialog({ onInvite }: Props) {
                 Cancelar
               </Button>
               <Button type="submit" disabled={loading} className="flex-1 bg-blue hover:bg-blue/90">
-                {loading ? 'Gerando...' : 'Gerar Convite'}
+                {loading ? 'Enviando...' : 'Enviar Convite'}
               </Button>
             </div>
           </form>
