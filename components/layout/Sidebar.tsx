@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { LayoutDashboard, Kanban, Building2, Users, LogOut, Package, CalendarDays } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -31,11 +32,24 @@ export function Sidebar({ userName, userEmail }: Props) {
       {/* Logo */}
       <div className="px-6 py-6 border-b border-white/10">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue to-blue-vivid flex items-center justify-center shadow-lg">
-            <span className="text-white font-bold text-sm">B</span>
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/6 ring-1 ring-white/10 shadow-lg overflow-hidden shrink-0">
+            <Image
+              src="/brand-icon.png"
+              alt="Blue CRM icon"
+              width={28}
+              height={28}
+              className="h-7 w-7 rounded-full"
+            />
           </div>
-          <div>
-            <p className="font-bold text-white text-sm leading-none">Blue CRM</p>
+          <div className="min-w-0">
+            <Image
+              src="/brand-logo.png"
+              alt="Blue CRM"
+              width={119}
+              height={40}
+              className="h-auto w-[118px]"
+              priority
+            />
             <p className="text-xs text-white/40 mt-0.5">Sales Platform</p>
           </div>
         </div>

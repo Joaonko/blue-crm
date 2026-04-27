@@ -1,3 +1,5 @@
+import Image from 'next/image'
+
 export default function AuthLayout({
   children,
 }: {
@@ -10,10 +12,24 @@ export default function AuthLayout({
         <div className="absolute inset-0 bg-gradient-to-br from-blue/20 to-transparent pointer-events-none" />
         <div>
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue to-blue-vivid flex items-center justify-center shadow-lg">
-              <span className="text-white font-bold">B</span>
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/6 ring-1 ring-white/10 shadow-lg overflow-hidden shrink-0">
+              <Image
+                src="/brand-icon.png"
+                alt="Blue CRM icon"
+                width={32}
+                height={32}
+                className="h-8 w-8 rounded-full"
+                priority
+              />
             </div>
-            <span className="text-white font-bold text-lg">Blue CRM</span>
+            <Image
+              src="/brand-logo.png"
+              alt="Blue CRM"
+              width={149}
+              height={50}
+              className="h-auto w-[148px]"
+              priority
+            />
           </div>
         </div>
         <div className="relative z-10">

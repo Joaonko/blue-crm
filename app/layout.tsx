@@ -10,6 +10,11 @@ const dmSans = DM_Sans({
 export const metadata: Metadata = {
   title: "Blue CRM",
   description: "CRM completo para gestão de vendas B2B",
+  icons: {
+    icon: "/brand-icon.png",
+    shortcut: "/brand-icon.png",
+    apple: "/brand-icon.png",
+  },
 }
 
 export default function RootLayout({
