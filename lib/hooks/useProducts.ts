@@ -15,6 +15,10 @@ export function useProducts() {
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
 
+  function sortProducts(list: Product[]) {
+    return [...list].sort((a, b) => a.name.localeCompare(b.name))
+  }
+
   async function fetchProducts() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setLoading(false); return }
@@ -35,7 +39,7 @@ export function useProducts() {
       .eq('active', true)
       .order('name')
 
-    setProducts(data ?? [])
+    setProducts(sortProducts(data ?? []))
     setLoading(false)
   }
 
@@ -58,7 +62,29 @@ export function useProducts() {
       .select()
       .single()
 
-    if (!error && data) setProducts(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
+    if (!error && data) setProducts(prev => sortProducts([...prev, data]))
+    return { error }
+  }
+
+  async function updateProduct(id: string, name: string) {
+    const trimmedName = name.trim()
+    if (!trimmedName) return { error: new Error('Nome obrigatório') }
+
+    const { data, error } = await supabase
+      .from('products')
+      .update({ name: trimmedName })
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (!error && data) {
+      setProducts(prev =>
+        sortProducts(
+          prev.map(product => product.id === id ? data : product)
+        )
+      )
+    }
+
     return { error }
   }
 
@@ -77,5 +103,5 @@ export function useProducts() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  return { products, loading, createProduct, deleteProduct, refresh: fetchProducts }
+  return { products, loading, createProduct, updateProduct, deleteProduct, refresh: fetchProducts }
 }

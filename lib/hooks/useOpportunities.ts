@@ -368,6 +368,31 @@ export function useOpportunities(selectedFunnelIdParam?: string | null) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedFunnelIdParam])
 
+  useEffect(() => {
+    if (!orgId || !selectedFunnelId) return
+
+    const channel = supabase
+      .channel(`pipeline-products-${orgId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'products',
+          filter: `organization_id=eq.${orgId}`,
+        },
+        () => {
+          void fetchData(selectedFunnelId)
+        }
+      )
+      .subscribe()
+
+    return () => {
+      void supabase.removeChannel(channel)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgId, selectedFunnelId])
+
   return {
     opportunities,
     wonOpportunities,
