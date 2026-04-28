@@ -3,7 +3,12 @@
 import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { useOpportunityDetail } from '@/lib/hooks/useOpportunityDetail'
+import {
+  MAX_NOTE_IMAGES,
+  MAX_NOTE_IMAGE_SIZE,
+  NOTE_IMAGE_TYPES,
+  useOpportunityDetail,
+} from '@/lib/hooks/useOpportunityDetail'
 import { useClients } from '@/lib/hooks/useClients'
 import { useProducts } from '@/lib/hooks/useProducts'
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -24,7 +29,7 @@ import {
 import {
   ArrowLeft, DollarSign, User, Calendar, TrendingUp,
   Plus, Trash2, FileUp, FileText, Trophy, XCircle, Clock, Package, CreditCard,
-  Pencil,
+  ImagePlus, Pencil, X,
 } from 'lucide-react'
 
 const statusConfig = {
@@ -70,6 +75,9 @@ export default function OpportunityDetailPage() {
   const { products } = useProducts()
 
   const [noteText, setNoteText] = useState('')
+  const [noteImages, setNoteImages] = useState<File[]>([])
+  const [noteInputKey, setNoteInputKey] = useState(0)
+  const [noteError, setNoteError] = useState<string | null>(null)
   const [addingNote, setAddingNote] = useState(false)
   const [lostReason, setLostReason] = useState('')
   const [showLostForm, setShowLostForm] = useState(false)
@@ -140,11 +148,56 @@ export default function OpportunityDetailPage() {
   }
 
   async function handleAddNote() {
-    if (!noteText.trim()) return
+    if (!noteText.trim() && noteImages.length === 0) return
     setAddingNote(true)
-    await addNote(noteText.trim())
+    setNoteError(null)
+
+    const { error } = await addNote(noteText, noteImages)
+    if (error) {
+      setNoteError(error.message)
+      setAddingNote(false)
+      return
+    }
+
     setNoteText('')
+    setNoteImages([])
+    setNoteInputKey(prev => prev + 1)
     setAddingNote(false)
+  }
+
+  function handleNoteImageChange(files: FileList | null) {
+    const selectedFiles = Array.from(files ?? [])
+    setNoteError(null)
+
+    if (selectedFiles.length > MAX_NOTE_IMAGES) {
+      setNoteError(`Selecione no máximo ${MAX_NOTE_IMAGES} imagens por nota.`)
+      setNoteImages([])
+      setNoteInputKey(prev => prev + 1)
+      return
+    }
+
+    const invalidType = selectedFiles.find(file => !NOTE_IMAGE_TYPES.includes(file.type as typeof NOTE_IMAGE_TYPES[number]))
+    if (invalidType) {
+      setNoteError('Use apenas imagens PNG, JPG, WEBP ou GIF.')
+      setNoteImages([])
+      setNoteInputKey(prev => prev + 1)
+      return
+    }
+
+    const invalidSize = selectedFiles.find(file => file.size > MAX_NOTE_IMAGE_SIZE)
+    if (invalidSize) {
+      setNoteError('Cada imagem pode ter no máximo 10MB.')
+      setNoteImages([])
+      setNoteInputKey(prev => prev + 1)
+      return
+    }
+
+    setNoteImages(selectedFiles)
+  }
+
+  function clearNoteImages() {
+    setNoteImages([])
+    setNoteInputKey(prev => prev + 1)
   }
 
   async function handleWon() {
@@ -391,12 +444,52 @@ export default function OpportunityDetailPage() {
                 onChange={e => setNoteText(e.target.value)}
                 rows={3}
               />
+              <div className="space-y-2">
+                <Label htmlFor="note-images">Imagens</Label>
+                <Input
+                  key={noteInputKey}
+                  id="note-images"
+                  type="file"
+                  accept={NOTE_IMAGE_TYPES.join(',')}
+                  multiple
+                  onChange={e => handleNoteImageChange(e.target.files)}
+                />
+                {noteImages.length > 0 && (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs font-medium text-slate-600">
+                        {noteImages.length} {noteImages.length === 1 ? 'imagem selecionada' : 'imagens selecionadas'}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={clearNoteImages}
+                        className="inline-flex h-6 w-6 items-center justify-center rounded-md text-slate-500 hover:bg-white hover:text-red-500"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {noteImages.map((file, index) => (
+                        <span
+                          key={`${file.name}-${index}`}
+                          className="rounded-full bg-white px-2.5 py-1 text-[11px] text-slate-600 ring-1 ring-slate-200"
+                        >
+                          {file.name} · {formatBytes(file.size)}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              {noteError && (
+                <p className="text-sm text-red-600 bg-red-50 border border-red-100 p-3 rounded-xl">{noteError}</p>
+              )}
               <Button
                 className="bg-blue hover:bg-blue/90"
-                disabled={!noteText.trim() || addingNote}
+                disabled={(!noteText.trim() && noteImages.length === 0) || addingNote}
                 onClick={handleAddNote}
               >
-                <Plus className="w-4 h-4 mr-2" />
+                {noteImages.length > 0 ? <ImagePlus className="w-4 h-4 mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
                 {addingNote ? 'Salvando...' : 'Adicionar Nota'}
               </Button>
             </CardContent>
@@ -412,7 +505,31 @@ export default function OpportunityDetailPage() {
                 <Card key={note.id}>
                   <CardContent className="pt-4 pb-4">
                     <div className="flex items-start justify-between gap-2">
-                      <p className="text-sm text-gray-800 whitespace-pre-wrap flex-1">{note.content}</p>
+                      <div className="flex-1 space-y-3">
+                        {note.content && (
+                          <p className="text-sm text-gray-800 whitespace-pre-wrap">{note.content}</p>
+                        )}
+                        {note.attachments.length > 0 && (
+                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                            {note.attachments.map(attachment => (
+                              <a
+                                key={attachment.id}
+                                href={attachment.file_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="group block overflow-hidden rounded-lg border border-slate-200 bg-slate-50 hover:border-blue/40"
+                                title={attachment.file_name}
+                              >
+                                <img
+                                  src={attachment.file_url}
+                                  alt={attachment.file_name}
+                                  className="h-24 w-full object-cover transition-transform group-hover:scale-105"
+                                />
+                              </a>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                       <Button
                         variant="ghost"
                         size="icon-sm"

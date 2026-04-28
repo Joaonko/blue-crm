@@ -3,6 +3,17 @@
 import { createClient } from '@/lib/supabase/client'
 import { useEffect, useState } from 'react'
 
+export const MAX_NOTE_IMAGES = 5
+export const MAX_NOTE_IMAGE_SIZE = 10 * 1024 * 1024
+export const NOTE_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'] as const
+
+const noteImageExtensionByType: Record<string, string> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+}
+
 export type OpportunityDetail = {
   id: string
   title: string
@@ -28,12 +39,24 @@ export type OpportunityDetail = {
   owner_name: string
 }
 
+export type NoteAttachment = {
+  id: string
+  note_id: string
+  file_url: string
+  file_path: string
+  file_name: string
+  file_size: number
+  mime_type: string
+  created_at: string
+}
+
 export type Note = {
   id: string
   content: string
   created_at: string
   user_id: string
   author_name: string
+  attachments: NoteAttachment[]
 }
 
 export type Activity = {
@@ -73,6 +96,7 @@ export function useOpportunityDetail(opportunityId: string) {
     const [
       { data: opp },
       { data: notesData },
+      { data: noteAttachmentsData },
       { data: activitiesData },
       { data: proposalsData },
     ] = await Promise.all([
@@ -86,6 +110,11 @@ export function useOpportunityDetail(opportunityId: string) {
         .select('id, content, created_at, user_id')
         .eq('opportunity_id', opportunityId)
         .order('created_at', { ascending: false }),
+      supabase
+        .from('note_attachments')
+        .select('id, note_id, file_url, file_path, file_name, file_size, mime_type, created_at')
+        .eq('opportunity_id', opportunityId)
+        .order('created_at', { ascending: true }),
       supabase
         .from('activities')
         .select('id, type, description, created_at, user_id, metadata')
@@ -116,6 +145,13 @@ export function useOpportunityDetail(opportunityId: string) {
       .in('id', userIds)
 
     const profileMap = new Map(profilesData?.map(p => [p.id, p.full_name]) ?? [])
+    const attachmentsByNote = new Map<string, NoteAttachment[]>()
+
+    for (const attachment of noteAttachmentsData ?? []) {
+      const current = attachmentsByNote.get(attachment.note_id) ?? []
+      current.push(attachment)
+      attachmentsByNote.set(attachment.note_id, current)
+    }
 
     // Busca stages do funil
     const { data: stagesData } = await supabase
@@ -136,6 +172,7 @@ export function useOpportunityDetail(opportunityId: string) {
       (notesData ?? []).map((n: { id: string; content: string; created_at: string; user_id: string }) => ({
         ...n,
         author_name: profileMap.get(n.user_id) ?? 'Usuário',
+        attachments: attachmentsByNote.get(n.id) ?? [],
       }))
     )
     setActivities(
@@ -153,9 +190,44 @@ export function useOpportunityDetail(opportunityId: string) {
     setLoading(false)
   }
 
-  async function addNote(content: string) {
+  function validateNoteImages(images: File[]) {
+    if (images.length > MAX_NOTE_IMAGES) {
+      return new Error(`Selecione no máximo ${MAX_NOTE_IMAGES} imagens por nota.`)
+    }
+
+    const invalidType = images.find(file => !NOTE_IMAGE_TYPES.includes(file.type as typeof NOTE_IMAGE_TYPES[number]))
+    if (invalidType) {
+      return new Error('Use apenas imagens PNG, JPG, WEBP ou GIF.')
+    }
+
+    const invalidSize = images.find(file => file.size > MAX_NOTE_IMAGE_SIZE)
+    if (invalidSize) {
+      return new Error('Cada imagem pode ter no máximo 10MB.')
+    }
+
+    return null
+  }
+
+  function sanitizeFileName(fileName: string) {
+    return fileName
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9.-]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      || 'imagem'
+  }
+
+  async function addNote(content: string, images: File[] = []) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user || !opportunity) return { error: new Error('Não autenticado') }
+
+    const trimmedContent = content.trim()
+    if (!trimmedContent && images.length === 0) {
+      return { error: new Error('Adicione um texto ou uma imagem para salvar a nota.') }
+    }
+
+    const validationError = validateNoteImages(images)
+    if (validationError) return { error: validationError }
 
     const { data, error } = await supabase
       .from('notes')
@@ -163,32 +235,104 @@ export function useOpportunityDetail(opportunityId: string) {
         organization_id: opportunity.organization_id,
         opportunity_id: opportunityId,
         user_id: user.id,
-        content,
+        content: trimmedContent,
       })
       .select('id, content, created_at, user_id')
       .single()
 
-    if (!error && data) {
-      const { data: profile } = await supabase
-        .from('profiles').select('full_name').eq('id', user.id).single()
-      setNotes(prev => [{
-        ...data,
-        author_name: profile?.full_name ?? 'Usuário',
-      }, ...prev])
+    if (error || !data) return { error }
 
-      await supabase.from('activities').insert({
-        organization_id: opportunity.organization_id,
-        opportunity_id: opportunityId,
-        user_id: user.id,
-        type: 'note',
-        description: 'Adicionou uma nota',
-      })
+    const uploadedPaths: string[] = []
+    let attachments: NoteAttachment[] = []
+
+    if (images.length > 0) {
+      const attachmentPayload = []
+
+      for (const [index, image] of images.entries()) {
+        const extension = noteImageExtensionByType[image.type] ?? 'png'
+        const safeName = sanitizeFileName(image.name)
+        const path = `${opportunity.organization_id}/${opportunityId}/${data.id}/${Date.now()}-${index}-${safeName}.${extension}`
+
+        const { error: uploadError } = await supabase.storage
+          .from('note-images')
+          .upload(path, image, { contentType: image.type })
+
+        if (uploadError) {
+          if (uploadedPaths.length > 0) await supabase.storage.from('note-images').remove(uploadedPaths)
+          await supabase.from('notes').delete().eq('id', data.id)
+          return { error: uploadError }
+        }
+
+        uploadedPaths.push(path)
+        const { data: { publicUrl } } = supabase.storage.from('note-images').getPublicUrl(path)
+
+        attachmentPayload.push({
+          note_id: data.id,
+          organization_id: opportunity.organization_id,
+          opportunity_id: opportunityId,
+          file_url: publicUrl,
+          file_path: path,
+          file_name: image.name,
+          file_size: image.size,
+          mime_type: image.type,
+          uploaded_by: user.id,
+        })
+      }
+
+      const { data: createdAttachments, error: attachmentError } = await supabase
+        .from('note_attachments')
+        .insert(attachmentPayload)
+        .select('id, note_id, file_url, file_path, file_name, file_size, mime_type, created_at')
+
+      if (attachmentError) {
+        await supabase.storage.from('note-images').remove(uploadedPaths)
+        await supabase.from('notes').delete().eq('id', data.id)
+        return { error: attachmentError }
+      }
+
+      attachments = createdAttachments ?? []
     }
 
-    return { error }
+    const { data: profile } = await supabase
+      .from('profiles').select('full_name').eq('id', user.id).single()
+    setNotes(prev => [{
+      ...data,
+      author_name: profile?.full_name ?? 'Usuário',
+      attachments,
+    }, ...prev])
+
+    await supabase.from('activities').insert({
+      organization_id: opportunity.organization_id,
+      opportunity_id: opportunityId,
+      user_id: user.id,
+      type: 'note',
+      description: 'Adicionou uma nota',
+    })
+
+    return { error: null }
   }
 
   async function deleteNote(noteId: string) {
+    const note = notes.find(n => n.id === noteId)
+    const filePaths = note?.attachments.map(attachment => attachment.file_path) ?? []
+
+    if (filePaths.length > 0) {
+      const { error: removeStorageError } = await supabase.storage
+        .from('note-images')
+        .remove(filePaths)
+
+      if (removeStorageError) return { error: removeStorageError }
+    }
+
+    if (filePaths.length > 0) {
+      const { error: removeAttachmentsError } = await supabase
+        .from('note_attachments')
+        .delete()
+        .eq('note_id', noteId)
+
+      if (removeAttachmentsError) return { error: removeAttachmentsError }
+    }
+
     const { error } = await supabase.from('notes').delete().eq('id', noteId)
     if (!error) setNotes(prev => prev.filter(n => n.id !== noteId))
     return { error }
