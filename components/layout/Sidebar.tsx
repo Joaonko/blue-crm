@@ -31,27 +31,16 @@ export function Sidebar({ userName, userEmail }: Props) {
     <aside className="flex flex-col w-64 min-h-screen bg-[#0C1A2E] text-white shrink-0">
       {/* Logo */}
       <div className="px-6 py-6 border-b border-white/10">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/6 ring-1 ring-white/10 shadow-lg overflow-hidden shrink-0">
-            <Image
-              src="/brand-icon.png"
-              alt="Blue CRM icon"
-              width={28}
-              height={28}
-              className="h-7 w-7 rounded-full"
-            />
-          </div>
-          <div className="min-w-0">
-            <Image
-              src="/brand-logo.png"
-              alt="Blue CRM"
-              width={119}
-              height={40}
-              className="h-auto w-[118px]"
-              priority
-            />
-            <p className="text-xs text-white/40 mt-0.5">Sales Platform</p>
-          </div>
+        <div className="space-y-2">
+          <Image
+            src="/brand-logo.png"
+            alt="Blue CRM"
+            width={179}
+            height={60}
+            className="h-auto w-[150px] drop-shadow-[0_4px_18px_rgba(0,0,0,0.35)]"
+            priority
+          />
+          <p className="pl-1 text-xs text-white/45">Sales Platform</p>
         </div>
       </div>
 

@@ -11,23 +11,13 @@ export default function AuthLayout({
       <div className="hidden lg:flex lg:w-1/2 flex-col justify-between p-12 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-blue/20 to-transparent pointer-events-none" />
         <div>
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/6 ring-1 ring-white/10 shadow-lg overflow-hidden shrink-0">
-              <Image
-                src="/brand-icon.png"
-                alt="Blue CRM icon"
-                width={32}
-                height={32}
-                className="h-8 w-8 rounded-full"
-                priority
-              />
-            </div>
+          <div className="inline-flex rounded-2xl bg-white/5 px-4 py-3 ring-1 ring-white/10 shadow-[0_12px_40px_rgba(0,0,0,0.18)]">
             <Image
               src="/brand-logo.png"
               alt="Blue CRM"
-              width={149}
-              height={50}
-              className="h-auto w-[148px]"
+              width={179}
+              height={60}
+              className="h-auto w-[170px] drop-shadow-[0_4px_16px_rgba(0,0,0,0.3)]"
               priority
             />
           </div>
