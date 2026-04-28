@@ -29,7 +29,7 @@ import {
 import {
   ArrowLeft, DollarSign, User, Calendar, TrendingUp,
   Plus, Trash2, FileUp, FileText, Trophy, XCircle, Clock, Package, CreditCard,
-  ImagePlus, Pencil, X,
+  ImagePlus, Pencil, Sparkles, X,
 } from 'lucide-react'
 
 const statusConfig = {
@@ -585,7 +585,21 @@ export default function OpportunityDetailPage() {
         <TabsContent value="proposals" className="mt-4 space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm">Enviar Nova Proposta</CardTitle>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <CardTitle className="text-sm">Propostas</CardTitle>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Envie um arquivo manualmente ou gere uma proposta automática com os dados deste deal.
+                  </p>
+                </div>
+                <Link
+                  href={`/proposals?opportunity=${opportunity.id}`}
+                  className={buttonVariants({ className: 'bg-gradient-to-r from-blue to-blue-vivid text-white hover:opacity-90' })}
+                >
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Criar proposta automática
+                </Link>
+              </div>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleUpload} className="space-y-3">
@@ -600,7 +614,7 @@ export default function OpportunityDetailPage() {
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label htmlFor="proposal-file">Arquivo (PDF) *</Label>
+                  <Label htmlFor="proposal-file">Arquivo (PDF, DOCX, DOC ou PPTX) *</Label>
                   <Input
                     id="proposal-file"
                     type="file"
@@ -654,6 +668,11 @@ export default function OpportunityDetailPage() {
                           <div className="flex items-center gap-2 flex-wrap">
                             <p className="font-medium text-sm text-navy">{proposal.title}</p>
                             <Badge variant="outline" className="text-xs">v{proposal.version}</Badge>
+                            {proposal.file_format && proposal.file_format !== 'uploaded' && (
+                              <Badge variant="secondary" className="text-xs uppercase">
+                                {proposal.file_format}
+                              </Badge>
+                            )}
                           </div>
                           <p className="text-xs text-muted-foreground mt-0.5">
                             {proposal.file_name} · {formatBytes(proposal.file_size)}

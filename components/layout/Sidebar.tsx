@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Kanban, Building2, Users, LogOut, Package, CalendarDays } from 'lucide-react'
+import { LayoutDashboard, Kanban, Building2, Users, LogOut, Package, CalendarDays, FileText } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const nav = [
@@ -11,6 +11,7 @@ const nav = [
   { href: '/pipeline', label: 'Pipeline', icon: Kanban },
   { href: '/clients', label: 'Clientes', icon: Building2 },
   { href: '/products', label: 'Produtos', icon: Package },
+  { href: '/proposals', label: 'Propostas', icon: FileText },
   { href: '/agenda', label: 'Agenda', icon: CalendarDays },
   { href: '/team', label: 'Equipe', icon: Users },
 ]

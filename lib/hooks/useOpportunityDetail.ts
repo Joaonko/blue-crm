@@ -73,6 +73,7 @@ export type Proposal = {
   id: string
   title: string
   version: number
+  file_format: 'uploaded' | 'pdf' | 'docx' | null
   file_url: string
   file_name: string
   file_size: number
@@ -122,7 +123,7 @@ export function useOpportunityDetail(opportunityId: string) {
         .order('created_at', { ascending: false }),
       supabase
         .from('proposals')
-        .select('id, title, version, file_url, file_name, file_size, notes, uploaded_at, uploaded_by')
+        .select('id, title, version, file_format, file_url, file_name, file_size, notes, uploaded_at, uploaded_by')
         .eq('opportunity_id', opportunityId)
         .order('uploaded_at', { ascending: false }),
     ])
@@ -182,8 +183,9 @@ export function useOpportunityDetail(opportunityId: string) {
       }))
     )
     setProposals(
-      (proposalsData ?? []).map((p: { id: string; title: string; version: number; file_url: string; file_name: string; file_size: number; notes: string | null; uploaded_at: string; uploaded_by: string }) => ({
+      (proposalsData ?? []).map((p: { id: string; title: string; version: number; file_format?: 'uploaded' | 'pdf' | 'docx' | null; file_url: string; file_name: string; file_size: number; notes: string | null; uploaded_at: string; uploaded_by: string }) => ({
         ...p,
+        file_format: p.file_format ?? null,
         uploader_name: profileMap.get(p.uploaded_by) ?? 'Usuário',
       }))
     )
